@@ -23,7 +23,10 @@ python main.py
 1. **Choose Context**: Team brainstorm, strangers meeting, or couples/dates
 2. **Select Mode**: 
    - 🌌 **Maximum Distance**: Find furthest-apart ideas with a thread
-   - 🌉 **Surprise Bridge**: Two distant ideas + unexpected third concept
+   - 🌉 **Surprise Bridge**: Pairwise surprising links (currently uses max distance)
+   - 🧵 **Triplet Weave**: Three-way connection so everyone is included (3+ participants)
+   - 🌐 **Centroid Constellation**: One idea per person around a shared center
+   - ⛓️ **Bridge Chain**: A chain of ideas that includes all participants
    - 🎁 **Asymmetric Gift**: Something from one person illuminates another (couples only)
 3. **Enter Knowledge Bites**: Memories, interests, random facts, obsessions
 4. **Generate**: The app embeds all inputs, finds semantic distances, and generates stories
@@ -49,6 +52,12 @@ Traditional RAG: "What's most similar?"
 SemanticBridge: "What's most distant but still connected?"
 
 By finding knowledge bites that are far apart in embedding space but still have some semantic relationship, we surface unexpected connections that spark creativity, conversation, and connection between people.
+
+## Mode Notes
+
+- **Triplet Weave** requires at least 3 participants with bites.
+- **Group modes for couples** (Centroid Constellation, Bridge Chain) require at least 2 bites per person.
+- The app returns a JSON-formatted response from the LLM and shows optional debug insights about the embedding search in the UI.
 
 ## Settings
 
