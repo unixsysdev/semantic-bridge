@@ -456,7 +456,21 @@ body {
     gap: 2rem;
 }
 
-.connections-found {
+.connections-found,
+.group-connections-found {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.connections-title {
+    font-family: var(--font-serif);
+    font-size: 1.1rem;
+    color: var(--text);
+}
+
+.connections-list,
+.group-connections-list {
     display: grid;
     gap: 1rem;
 }

@@ -35,7 +35,11 @@ from semantic import (
     KnowledgeBite,
     find_maximum_distance_pairs,
     find_asymmetric_gifts,
-    prepare_prompt_for_context
+    find_triplet_connections,
+    find_centroid_constellation,
+    find_bridge_chain,
+    prepare_prompt_for_context,
+    prepare_prompt_for_group_context
 )
 
 app = FastAPI(title="SemanticBridge", description="Connect people through unexpected stories")
@@ -73,11 +77,23 @@ class ConnectionResult(BaseModel):
     bridge_concept: Optional[str] = None
 
 
+class GroupMember(BaseModel):
+    participant: str
+    bite: str
+
+
+class GroupConnectionResult(BaseModel):
+    members: List[GroupMember]
+    score: float
+    strategy: str
+
+
 class GenerateResponse(BaseModel):
     connections: List[ConnectionResult]
     story: str
     reasoning: Optional[str] = None
     debug: Optional[Dict[str, Any]] = None
+    groups: Optional[List[GroupConnectionResult]] = None
 
 
 @app.get("/")
@@ -133,18 +149,64 @@ async def generate_connections(request: GenerateRequest):
         search_debug: Dict[str, Any] = {}
         mode_used = request.mode
         mode_note = None
-        if request.mode == "max_distance":
+        connections = []
+        groups = []
+        pairing_strategy = "pairwise"
+
+        if request.mode in {"triplet_weave", "centroid_constellation", "bridge_chain"}:
+            pairing_strategy = "group"
+            participant_ids = {p.id for p in request.participants}
+
+            if request.mode == "triplet_weave" and len(participant_ids) < 3:
+                raise HTTPException(status_code=400, detail="Triplet Weave requires at least 3 participants.")
+
+            if request.context == "couples" and request.mode in {"centroid_constellation", "bridge_chain"}:
+                for participant in request.participants:
+                    bite_count = len([b for b in participant.bites if b.strip()])
+                    if bite_count < 2:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Group modes for couples require at least 2 knowledge bites per person."
+                        )
+
+            if request.mode == "triplet_weave":
+                groups = find_triplet_connections(all_bites, top_k=3, debug=search_debug)
+            elif request.mode == "centroid_constellation":
+                groups = find_centroid_constellation(all_bites, top_k=1, debug=search_debug)
+            elif request.mode == "bridge_chain":
+                groups = find_bridge_chain(all_bites, top_k=1, debug=search_debug)
+
+            if not groups:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Couldn't find a group connection. Try adding more diverse knowledge bites."
+                )
+
+            prompt = prepare_prompt_for_group_context(groups, request.context, request.mode)
+        elif request.mode in {"max_distance", "surprise_bridge"}:
             connections = find_maximum_distance_pairs(
                 all_bites,
                 cross_participant_only=True,
                 top_k=3,
                 debug=search_debug
             )
+            if not connections:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Couldn't find interesting connections. Try adding more diverse knowledge bites!"
+                )
+            prompt = prepare_prompt_for_context(connections, request.context, request.mode)
         elif request.mode == "asymmetric_gift" and len(request.participants) == 2:
             # For couples: find gifts from person 1 to person 2
             p1_bites = [b for b in all_bites if b.participant_id == request.participants[0].id]
             p2_bites = [b for b in all_bites if b.participant_id == request.participants[1].id]
             connections = find_asymmetric_gifts(p1_bites, p2_bites, top_k=3, debug=search_debug)
+            if not connections:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Couldn't find interesting connections. Try adding more diverse knowledge bites!"
+                )
+            prompt = prepare_prompt_for_context(connections, request.context, request.mode)
         else:
             # Default to max distance
             connections = find_maximum_distance_pairs(
@@ -153,16 +215,16 @@ async def generate_connections(request: GenerateRequest):
                 top_k=3,
                 debug=search_debug
             )
+            if not connections:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Couldn't find interesting connections. Try adding more diverse knowledge bites!"
+                )
+            prompt = prepare_prompt_for_context(connections, request.context, "max_distance")
             if request.mode != "max_distance":
                 mode_used = "max_distance"
                 mode_note = f"Mode '{request.mode}' is not available for this request; fell back to max_distance."
                 logger.info(mode_note)
-        
-        if not connections:
-            raise HTTPException(status_code=400, detail="Couldn't find interesting connections. Try adding more diverse knowledge bites!")
-        
-        # Prepare prompt and generate story
-        prompt = prepare_prompt_for_context(connections, request.context, request.mode)
         
         if request.stream:
             # Return streaming response
@@ -216,6 +278,18 @@ async def generate_connections(request: GenerateRequest):
                 )
                 for conn in connections
             ]
+
+            group_results = [
+                GroupConnectionResult(
+                    members=[
+                        GroupMember(participant=member.participant_name, bite=member.text)
+                        for member in group.members
+                    ],
+                    score=group.score,
+                    strategy=group.strategy
+                )
+                for group in groups
+            ] if groups else None
             
             debug_info = {
                 "context": request.context,
@@ -228,7 +302,8 @@ async def generate_connections(request: GenerateRequest):
                     "model": "Qwen3-Embedding-8B",
                     "dimensions": embedding_dim
                 },
-                "pairing_strategy": "pairwise",
+                "pairing_strategy": pairing_strategy,
+                "group_count": len(group_results) if group_results else 0,
                 "search": search_debug
             }
             logger.info("Search debug: %s", debug_info)
@@ -237,7 +312,8 @@ async def generate_connections(request: GenerateRequest):
                 connections=connection_results,
                 story=story,
                 reasoning=reasoning,
-                debug=debug_info
+                debug=debug_info,
+                groups=group_results
             )
     
     except HTTPException:

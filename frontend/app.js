@@ -60,6 +60,11 @@ function initModeCards() {
             cards.forEach(c => c.classList.remove('selected'));
             card.classList.add('selected');
             state.mode = card.dataset.mode;
+
+            if (state.mode === 'triplet_weave' && state.participantCount < 3) {
+                state.participantCount = 3;
+                document.getElementById('participant-count').value = 3;
+            }
             
             updateStep2NextButton();
         });
@@ -68,6 +73,9 @@ function initModeCards() {
 
 function updateModeCardsForContext() {
     const asymmetricCard = document.querySelector('.mode-card[data-mode="asymmetric_gift"]');
+    const tripletCard = document.querySelector('.mode-card[data-mode="triplet_weave"]');
+    const centroidCard = document.querySelector('.mode-card[data-mode="centroid_constellation"]');
+    const chainCard = document.querySelector('.mode-card[data-mode="bridge_chain"]');
     
     // Asymmetric gift only makes sense for couples
     if (state.context === 'couples') {
@@ -82,6 +90,27 @@ function updateModeCardsForContext() {
             asymmetricCard.classList.remove('selected');
             state.mode = null;
         }
+    }
+
+    // Triplet weave requires 3 participants
+    if (state.context === 'couples') {
+        tripletCard.disabled = true;
+        tripletCard.style.opacity = '0.4';
+        if (state.mode === 'triplet_weave') {
+            tripletCard.classList.remove('selected');
+            state.mode = null;
+        }
+    } else {
+        tripletCard.disabled = false;
+        tripletCard.style.opacity = '1';
+    }
+
+    // Group modes are allowed for all contexts, but couples should add more bites
+    if (state.context === 'couples') {
+        centroidCard.disabled = false;
+        centroidCard.style.opacity = '1';
+        chainCard.disabled = false;
+        chainCard.style.opacity = '1';
     }
     
     // For couples, default participant count to 2
@@ -277,6 +306,19 @@ async function generate() {
         alert('Please enter at least one knowledge bite for at least 2 participants.');
         return;
     }
+
+    if (state.mode === 'triplet_weave' && validParticipants.length < 3) {
+        alert('Triplet Weave requires at least 3 participants with knowledge bites.');
+        return;
+    }
+
+    if (state.context === 'couples' && ['centroid_constellation', 'bridge_chain'].includes(state.mode)) {
+        const biteCounts = state.participants.map(p => p.bites.filter(b => b.trim().length > 0).length);
+        if (biteCounts.some(count => count < 2)) {
+            alert('For couples, group modes require at least 2 knowledge bites per person.');
+            return;
+        }
+    }
     
     // Prepare request
     const requestData = {
@@ -324,7 +366,7 @@ async function generateWithoutStream(requestData) {
     state.results = data;
     
     hideLoading();
-    renderResults(data.connections, data.story, data.debug, data.reasoning);
+    renderResults(data.connections, data.story, data.debug, data.reasoning, data.groups);
     goToStep(4);
 }
 
@@ -352,18 +394,21 @@ async function generateWithStream(requestData) {
         const data = JSON.parse(text);
         state.results = data;
         hideLoading();
-        renderResults(data.connections, data.story, data.debug, data.reasoning);
+        renderResults(data.connections, data.story, data.debug, data.reasoning, data.groups);
         goToStep(4);
     } catch {
         // If it's streamed text, show it directly
         hideLoading();
-        renderResults([], text);
+        renderResults([], text, null, null, []);
         goToStep(4);
     }
 }
 
-function renderResults(connections, story, debug, reasoning) {
-    const connectionsContainer = document.querySelector('.connections-found');
+function renderResults(connections, story, debug, reasoning, groups) {
+    const connectionsSection = document.querySelector('.connections-found');
+    const connectionsList = document.querySelector('.connections-list');
+    const groupSection = document.querySelector('.group-connections-found');
+    const groupList = document.querySelector('.group-connections-list');
     const storyContainer = document.querySelector('.story-content');
     const embeddingDetails = document.getElementById('embedding-insights');
     const embeddingText = document.getElementById('embedding-insights-text');
@@ -371,29 +416,55 @@ function renderResults(connections, story, debug, reasoning) {
     const reasoningText = document.getElementById('reasoning-text');
     
     // Render connections
-    connectionsContainer.innerHTML = connections.map((conn, i) => `
-        <div class="connection-card">
-            <div class="connection-header">
-                <span class="connection-label">Connection ${i + 1}</span>
-                <span class="connection-distance">Distance: ${conn.distance.toFixed(3)}</span>
-            </div>
-            <div class="connection-bites">
-                <div class="connection-bite">
-                    <span class="bite-author">${conn.participant1}:</span>
-                    <span class="bite-text">"${conn.bite1}"</span>
+    if (connectionsList && connectionsSection) {
+        connectionsList.innerHTML = connections.map((conn, i) => `
+            <div class="connection-card">
+                <div class="connection-header">
+                    <span class="connection-label">Connection ${i + 1}</span>
+                    <span class="connection-distance">Distance: ${conn.distance.toFixed(3)}</span>
                 </div>
-                <div class="connection-bite">
-                    <span class="bite-author">${conn.participant2}:</span>
-                    <span class="bite-text">"${conn.bite2}"</span>
+                <div class="connection-bites">
+                    <div class="connection-bite">
+                        <span class="bite-author">${conn.participant1}:</span>
+                        <span class="bite-text">"${conn.bite1}"</span>
+                    </div>
+                    <div class="connection-bite">
+                        <span class="bite-author">${conn.participant2}:</span>
+                        <span class="bite-text">"${conn.bite2}"</span>
+                    </div>
                 </div>
+                ${conn.bridge_concept ? `
+                    <div class="bridge-concept">
+                        <strong>Bridge:</strong> ${conn.bridge_concept}
+                    </div>
+                ` : ''}
             </div>
-            ${conn.bridge_concept ? `
+        `).join('');
+        connectionsSection.style.display = connections.length ? 'flex' : 'none';
+    }
+
+    if (groupList && groupSection) {
+        groupList.innerHTML = (groups || []).map((group, i) => `
+            <div class="connection-card">
+                <div class="connection-header">
+                    <span class="connection-label">Group ${i + 1}</span>
+                    <span class="connection-distance">Score: ${group.score.toFixed(3)}</span>
+                </div>
+                <div class="connection-bites">
+                    ${group.members.map(member => `
+                        <div class="connection-bite">
+                            <span class="bite-author">${member.participant}:</span>
+                            <span class="bite-text">"${member.bite}"</span>
+                        </div>
+                    `).join('')}
+                </div>
                 <div class="bridge-concept">
-                    <strong>Bridge:</strong> ${conn.bridge_concept}
+                    <strong>Strategy:</strong> ${formatStrategyLabel(group.strategy)}
                 </div>
-            ` : ''}
-        </div>
-    `).join('');
+            </div>
+        `).join('');
+        groupSection.style.display = groups && groups.length ? 'flex' : 'none';
+    }
     
     // Render story with typewriter effect
     storyContainer.innerHTML = '';
@@ -455,6 +526,9 @@ function formatEmbeddingDebug(debug) {
     }
     lines.push(`Participants: ${debug.participant_count || 0}`);
     lines.push(`Knowledge bites: ${debug.bite_count || 0}`);
+    if (debug.group_count) {
+        lines.push(`Group connections: ${debug.group_count}`);
+    }
     if (embedding.model || embedding.dimensions) {
         lines.push(`Embedding model: ${embedding.model || 'n/a'} (${embedding.dimensions || 0} dims)`);
     }
@@ -481,12 +555,36 @@ function formatEmbeddingDebug(debug) {
     if (Object.keys(statsInRange).length > 0) {
         lines.push(`Distance stats (in range): min=${formatNumber(statsInRange.min)}, max=${formatNumber(statsInRange.max)}, mean=${formatNumber(statsInRange.mean)}`);
     }
+    if (search.score_stats) {
+        lines.push(`Group score stats: min=${formatNumber(search.score_stats.min)}, max=${formatNumber(search.score_stats.max)}, mean=${formatNumber(search.score_stats.mean)}`);
+    }
     if (Array.isArray(search.candidate_pairs) && search.candidate_pairs.length > 0) {
         lines.push('Top candidate pairs:');
         search.candidate_pairs.forEach((pair, idx) => {
             const bite1 = truncateText(pair.bite1 || '', 80);
             const bite2 = truncateText(pair.bite2 || '', 80);
             lines.push(`${idx + 1}. ${formatNumber(pair.distance)} | ${pair.participant1}: "${bite1}" <> ${pair.participant2}: "${bite2}"`);
+        });
+    }
+    if (Array.isArray(search.candidate_groups) && search.candidate_groups.length > 0) {
+        lines.push('Top candidate groups:');
+        search.candidate_groups.forEach((group, idx) => {
+            const members = group.members
+                .map(member => `${member.participant}: "${truncateText(member.bite || '', 60)}"`)
+                .join(' | ');
+            lines.push(`${idx + 1}. ${formatNumber(group.score)} | ${members}`);
+        });
+    }
+    if (search.triplet_counts) {
+        lines.push(`Triplets: total=${search.triplet_counts.total_triplets || 0}, in_range=${search.triplet_counts.within_threshold || 0}`);
+    }
+    if (search.centroid_distance_stats) {
+        lines.push(`Centroid distance stats: min=${formatNumber(search.centroid_distance_stats.min)}, max=${formatNumber(search.centroid_distance_stats.max)}, mean=${formatNumber(search.centroid_distance_stats.mean)}`);
+    }
+    if (Array.isArray(search.steps) && search.steps.length > 0) {
+        lines.push('Bridge chain:');
+        search.steps.forEach((step, idx) => {
+            lines.push(`${idx + 1}. ${step.from} -> ${step.to} (${formatNumber(step.distance)})`);
         });
     }
 
@@ -501,6 +599,15 @@ function truncateText(text, maxLength) {
 function formatNumber(value) {
     if (typeof value !== 'number') return '0.000';
     return value.toFixed(3);
+}
+
+function formatStrategyLabel(strategy) {
+    const labels = {
+        triplet_weave: 'Triplet Weave',
+        centroid_constellation: 'Centroid Constellation',
+        bridge_chain: 'Bridge Chain'
+    };
+    return labels[strategy] || strategy || 'Group';
 }
 
 // === Settings ===

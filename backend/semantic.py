@@ -4,6 +4,7 @@ This is where the magic happens - finding the most interesting connections.
 """
 import numpy as np
 from typing import List, Tuple, Dict, Any, Optional
+from itertools import combinations, product
 from dataclasses import dataclass
 
 
@@ -25,6 +26,15 @@ class Connection:
     bridge_concept: str = None  # For bridge mode
 
 
+@dataclass
+class GroupConnection:
+    """A discovered group connection across multiple bites."""
+    members: List[KnowledgeBite]
+    score: float
+    strategy: str
+    details: Optional[Dict[str, Any]] = None
+
+
 def cosine_similarity(a: List[float], b: List[float]) -> float:
     """Calculate cosine similarity between two vectors."""
     a = np.array(a)
@@ -35,6 +45,24 @@ def cosine_similarity(a: List[float], b: List[float]) -> float:
 def cosine_distance(a: List[float], b: List[float]) -> float:
     """Calculate cosine distance (1 - similarity)."""
     return 1 - cosine_similarity(a, b)
+
+
+def compute_centroid(embeddings: List[List[float]]) -> List[float]:
+    if not embeddings:
+        return []
+    arr = np.array(embeddings)
+    return arr.mean(axis=0).tolist()
+
+
+def distance_stats(values: List[float]) -> Dict[str, float]:
+    if not values:
+        return {"min": 0.0, "max": 0.0, "mean": 0.0}
+    arr = np.array(values)
+    return {
+        "min": float(arr.min()),
+        "max": float(arr.max()),
+        "mean": float(arr.mean())
+    }
 
 
 def find_maximum_distance_pairs(
@@ -264,6 +292,292 @@ def find_asymmetric_gifts(
     return connections[:top_k]
 
 
+def find_triplet_connections(
+    bites: List[KnowledgeBite],
+    top_k: int = 3,
+    debug: Optional[Dict[str, Any]] = None
+) -> List[GroupConnection]:
+    """
+    Find triplets of bites from different participants where all pairwise
+    distances are in the "distant but connected" range.
+    """
+    threshold_min = 0.2
+    threshold_max = 1.5
+    triplets: List[GroupConnection] = []
+    total_triplets = 0
+    in_range = 0
+    scores: List[float] = []
+    candidate_groups: List[Dict[str, Any]] = []
+
+    for i, j, k in combinations(range(len(bites)), 3):
+        bite1 = bites[i]
+        bite2 = bites[j]
+        bite3 = bites[k]
+        if len({bite1.participant_id, bite2.participant_id, bite3.participant_id}) < 3:
+            continue
+        if bite1.embedding is None or bite2.embedding is None or bite3.embedding is None:
+            continue
+        total_triplets += 1
+        d12 = cosine_distance(bite1.embedding, bite2.embedding)
+        d13 = cosine_distance(bite1.embedding, bite3.embedding)
+        d23 = cosine_distance(bite2.embedding, bite3.embedding)
+        if all(threshold_min < d < threshold_max for d in (d12, d13, d23)):
+            score = min(d12, d13, d23)
+            in_range += 1
+            scores.append(score)
+            triplets.append(GroupConnection(
+                members=[bite1, bite2, bite3],
+                score=score,
+                strategy="triplet_weave",
+                details={"pair_distances": [d12, d13, d23]}
+            ))
+            candidate_groups.append({
+                "members": [
+                    {"participant": bite1.participant_name, "bite": bite1.text},
+                    {"participant": bite2.participant_name, "bite": bite2.text},
+                    {"participant": bite3.participant_name, "bite": bite3.text}
+                ],
+                "score": score,
+                "pair_distances": [d12, d13, d23]
+            })
+
+    triplets.sort(key=lambda g: g.score, reverse=True)
+
+    if debug is not None:
+        candidate_groups.sort(key=lambda g: g["score"], reverse=True)
+        debug.update({
+            "strategy": "triplet_weave",
+            "threshold": {"min": threshold_min, "max": threshold_max},
+            "triplet_counts": {
+                "total_triplets": total_triplets,
+                "within_threshold": in_range
+            },
+            "score_stats": distance_stats(scores),
+            "candidate_groups": candidate_groups[:5]
+        })
+
+    return triplets[:top_k]
+
+
+def find_centroid_constellation(
+    bites: List[KnowledgeBite],
+    top_k: int = 1,
+    debug: Optional[Dict[str, Any]] = None
+) -> List[GroupConnection]:
+    """
+    Find a group that includes all participants by choosing one bite per participant
+    that sits near the shared centroid, then maximize pairwise distance.
+    """
+    participants: Dict[str, List[KnowledgeBite]] = {}
+    for bite in bites:
+        participants.setdefault(bite.participant_id, []).append(bite)
+
+    if len(participants) < 2:
+        return []
+
+    all_embeddings = [bite.embedding for bite in bites if bite.embedding is not None]
+    centroid = compute_centroid(all_embeddings)
+    if not centroid:
+        return []
+
+    centroid_distances: Dict[str, List[Tuple[KnowledgeBite, float]]] = {}
+    all_centroid_distances: List[float] = []
+    for participant_id, p_bites in participants.items():
+        distances = []
+        for bite in p_bites:
+            if bite.embedding is None:
+                continue
+            dist = cosine_distance(bite.embedding, centroid)
+            distances.append((bite, dist))
+            all_centroid_distances.append(dist)
+        centroid_distances[participant_id] = distances
+
+    target = float(np.mean(all_centroid_distances)) if all_centroid_distances else 0.5
+    candidate_map: Dict[str, List[KnowledgeBite]] = {}
+    for participant_id, distances in centroid_distances.items():
+        distances.sort(key=lambda bd: abs(bd[1] - target))
+        candidates = [bd[0] for bd in distances[:2]]
+        if not candidates:
+            continue
+        candidate_map[participant_id] = candidates
+
+    if len(candidate_map) < 2:
+        return []
+
+    participant_ids = list(candidate_map.keys())
+    candidate_lists = [candidate_map[pid] for pid in participant_ids]
+    groups: List[GroupConnection] = []
+    candidate_groups: List[Dict[str, Any]] = []
+
+    for combo in product(*candidate_lists):
+        pair_distances = []
+        valid = True
+        for i in range(len(combo)):
+            for j in range(i + 1, len(combo)):
+                dist = cosine_distance(combo[i].embedding, combo[j].embedding)
+                pair_distances.append(dist)
+                if dist < 0.15:
+                    valid = False
+        if not valid:
+            continue
+        score = float(np.mean(pair_distances)) if pair_distances else 0.0
+        groups.append(GroupConnection(
+            members=list(combo),
+            score=score,
+            strategy="centroid_constellation",
+            details={"pair_distances": pair_distances}
+        ))
+        candidate_groups.append({
+            "members": [
+                {"participant": member.participant_name, "bite": member.text}
+                for member in combo
+            ],
+            "score": score
+        })
+
+    groups.sort(key=lambda g: g.score, reverse=True)
+
+    if debug is not None:
+        candidate_groups.sort(key=lambda g: g["score"], reverse=True)
+        debug.update({
+            "strategy": "centroid_constellation",
+            "centroid_distance_stats": distance_stats(all_centroid_distances),
+            "candidate_groups": candidate_groups[:3]
+        })
+
+    return groups[:top_k]
+
+
+def find_bridge_chain(
+    bites: List[KnowledgeBite],
+    top_k: int = 1,
+    debug: Optional[Dict[str, Any]] = None
+) -> List[GroupConnection]:
+    """
+    Build a chain that includes all participants by starting from the most distant
+    pair and iteratively adding the next most distant-but-connected bite.
+    """
+    threshold_min = 0.2
+    threshold_max = 1.5
+    participants = {bite.participant_id for bite in bites}
+    if len(participants) < 2:
+        return []
+
+    # Precompute distance matrix
+    n = len(bites)
+    distances = [[0.0 for _ in range(n)] for _ in range(n)]
+    for i in range(n):
+        for j in range(i + 1, n):
+            if bites[i].embedding is None or bites[j].embedding is None:
+                continue
+            dist = cosine_distance(bites[i].embedding, bites[j].embedding)
+            distances[i][j] = dist
+            distances[j][i] = dist
+
+    # Start with the most distant cross-participant pair
+    best_pair = None
+    best_dist = -1.0
+    for i in range(n):
+        for j in range(i + 1, n):
+            if bites[i].participant_id == bites[j].participant_id:
+                continue
+            dist = distances[i][j]
+            if threshold_min < dist < threshold_max and dist > best_dist:
+                best_dist = dist
+                best_pair = (i, j)
+
+    if best_pair is None:
+        for i in range(n):
+            for j in range(i + 1, n):
+                if bites[i].participant_id == bites[j].participant_id:
+                    continue
+                dist = distances[i][j]
+                if dist > best_dist:
+                    best_dist = dist
+                    best_pair = (i, j)
+
+    if best_pair is None:
+        return []
+
+    chain_indices = [best_pair[0], best_pair[1]]
+    chain_members = [bites[best_pair[0]], bites[best_pair[1]]]
+    used_participants = {bites[best_pair[0]].participant_id, bites[best_pair[1]].participant_id}
+    chain_steps = [{
+        "from": bites[best_pair[0]].participant_name,
+        "to": bites[best_pair[1]].participant_name,
+        "distance": best_dist
+    }]
+
+    while len(used_participants) < len(participants):
+        best_candidate = None
+        best_score = -1.0
+        best_link = None
+
+        for idx, bite in enumerate(bites):
+            if bite.participant_id in used_participants:
+                continue
+            distances_to_chain = [distances[idx][existing] for existing in chain_indices]
+            if not distances_to_chain:
+                continue
+            min_dist = min(distances_to_chain)
+            if threshold_min < min_dist < threshold_max and min_dist > best_score:
+                best_score = min_dist
+                best_candidate = idx
+                nearest_index = chain_indices[distances_to_chain.index(min_dist)]
+                best_link = (nearest_index, idx, min_dist)
+
+        if best_candidate is None:
+            # Fallback: choose the closest candidate to the chain
+            fallback_best = None
+            fallback_dist = float("inf")
+            fallback_link = None
+            for idx, bite in enumerate(bites):
+                if bite.participant_id in used_participants:
+                    continue
+                distances_to_chain = [distances[idx][existing] for existing in chain_indices]
+                if not distances_to_chain:
+                    continue
+                min_dist = min(distances_to_chain)
+                if min_dist < fallback_dist:
+                    fallback_dist = min_dist
+                    fallback_best = idx
+                    nearest_index = chain_indices[distances_to_chain.index(min_dist)]
+                    fallback_link = (nearest_index, idx, min_dist)
+            best_candidate = fallback_best
+            best_link = fallback_link
+            best_score = fallback_dist if fallback_dist != float("inf") else 0.0
+
+        if best_candidate is None:
+            break
+
+        chain_indices.append(best_candidate)
+        chain_members.append(bites[best_candidate])
+        used_participants.add(bites[best_candidate].participant_id)
+        if best_link:
+            chain_steps.append({
+                "from": bites[best_link[0]].participant_name,
+                "to": bites[best_link[1]].participant_name,
+                "distance": best_link[2]
+            })
+
+    score = float(np.mean([step["distance"] for step in chain_steps])) if chain_steps else 0.0
+    group = GroupConnection(
+        members=chain_members,
+        score=score,
+        strategy="bridge_chain",
+        details={"chain": chain_steps}
+    )
+
+    if debug is not None:
+        debug.update({
+            "strategy": "bridge_chain",
+            "threshold": {"min": threshold_min, "max": threshold_max},
+            "steps": chain_steps
+        })
+
+    return [group][:top_k]
+
+
 def prepare_prompt_for_context(
     connections: List[Connection],
     context: str,
@@ -344,6 +658,89 @@ Be warm, intimate, and treat their connection as precious. Help them see each ot
         return f"""Here are some surprising connections between knowledge bites:
 
 {connections_str}
+
+What unexpected story, insight, or question emerges from these connections?
+
+{response_format}"""
+
+
+def prepare_prompt_for_group_context(
+    groups: List[GroupConnection],
+    context: str,
+    mode: str
+) -> str:
+    group_texts = []
+    for i, group in enumerate(groups):
+        member_lines = []
+        for member in group.members:
+            member_lines.append(
+                f"  - {member.participant_name}: \"{member.text}\""
+            )
+        group_texts.append(
+            f"Group {i+1} (score: {group.score:.3f}, strategy: {group.strategy}):\n"
+            + "\n".join(member_lines)
+        )
+
+    groups_str = "\n\n".join(group_texts)
+    response_format = (
+        "Return strictly valid JSON with keys \"ideas\" and \"reasoning\".\n"
+        "- ideas: plain text only (no markdown, no asterisks); format as three numbered lines like \"1) ...\".\n"
+        "- reasoning: 1-3 short sentences of high-level rationale, no step-by-step reasoning, plain text only.\n"
+    )
+
+    if context == "team":
+        return f"""You are helping a team brainstorm by finding unexpected connections that include everyone.
+
+Here are the most interesting group connections found across participants:
+
+{groups_str}
+
+Based on these connections, generate:
+1. A surprising insight or innovation that bridges the full group
+2. A concrete "What if..." question the team could explore
+3. An unexpected angle or approach this suggests for their work
+
+Be specific, actionable, and delightfully unexpected. Show them something they couldn't have seen alone.
+
+{response_format}"""
+
+    if context == "strangers":
+        return f"""You are creating magical conversation starters for strangers who just met.
+
+Here are group connections that include everyone:
+
+{groups_str}
+
+Create a sense of serendipity - like the universe conspired to bring these people together.
+Generate:
+1. A whimsical observation about what connects them
+2. A playful question they could explore together
+3. A tiny collaborative "micro-adventure" they could do right now
+
+Be warm, curious, and slightly magical. Give them permission to be playful with each other.
+
+{response_format}"""
+
+    if context == "couples":
+        return f"""You are creating intimate moments of discovery for a couple.
+
+Here are group connections that include both partners:
+
+{groups_str}
+
+Create tender "I didn't know that about you" moments.
+Generate:
+1. An observation about what their hidden connection reveals
+2. A gentle question one could ask the other
+3. A small ritual or moment they could share based on this discovery
+
+Be warm, intimate, and treat their connection as precious. Help them see each other anew.
+
+{response_format}"""
+
+    return f"""Here are some surprising group connections:
+
+{groups_str}
 
 What unexpected story, insight, or question emerges from these connections?
 
