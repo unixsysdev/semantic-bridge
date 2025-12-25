@@ -1,5 +1,7 @@
 # SemanticBridge 🌉
 
+Available here: https://geepity.com/app/
+
 **Connect people through unexpected stories by finding the most distant-yet-connected ideas.**
 
 Instead of traditional RAG (finding closest matches), SemanticBridge finds the *furthest apart* knowledge bites that still have a semantic thread connecting them. This creates surprising, serendipitous connections between people.
@@ -65,5 +67,3 @@ By finding knowledge bites that are far apart in embedding space but still have 
 - **Stream**: Real-time response streaming (currently disabled)
 
 ---
-
-Built for the Hangzhou hackathon 🚀
