@@ -22,6 +22,7 @@ const wizard = document.querySelector('.wizard');
 const steps = document.querySelectorAll('.step');
 const loadingOverlay = document.querySelector('.loading-overlay');
 const loadingText = document.querySelector('.loading-text');
+let loadingTimers = [];
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -350,6 +351,7 @@ async function generate() {
 
 async function generateWithoutStream(requestData) {
     updateLoadingText('Finding semantic bridges...');
+    scheduleLoadingHints();
     
     const response = await fetch(`${API_URL}/generate`, {
         method: 'POST',
@@ -366,12 +368,13 @@ async function generateWithoutStream(requestData) {
     state.results = data;
     
     hideLoading();
-    renderResults(data.connections, data.story, data.debug, data.reasoning, data.groups);
+    renderResults(data.connections, data.story, data.debug, data.reasoning, data.thinking, data.groups);
     goToStep(4);
 }
 
 async function generateWithStream(requestData) {
     updateLoadingText('Finding semantic bridges...');
+    scheduleLoadingHints();
     
     const response = await fetch(`${API_URL}/generate`, {
         method: 'POST',
@@ -394,17 +397,17 @@ async function generateWithStream(requestData) {
         const data = JSON.parse(text);
         state.results = data;
         hideLoading();
-        renderResults(data.connections, data.story, data.debug, data.reasoning, data.groups);
+        renderResults(data.connections, data.story, data.debug, data.reasoning, data.thinking, data.groups);
         goToStep(4);
     } catch {
         // If it's streamed text, show it directly
         hideLoading();
-        renderResults([], text, null, null, []);
+        renderResults([], text, null, null, null, []);
         goToStep(4);
     }
 }
 
-function renderResults(connections, story, debug, reasoning, groups) {
+function renderResults(connections, story, debug, reasoning, thinking, groups) {
     const connectionsSection = document.querySelector('.connections-found');
     const connectionsList = document.querySelector('.connections-list');
     const groupSection = document.querySelector('.group-connections-found');
@@ -414,6 +417,7 @@ function renderResults(connections, story, debug, reasoning, groups) {
     const embeddingText = document.getElementById('embedding-insights-text');
     const reasoningDetails = document.getElementById('reasoning-insights');
     const reasoningText = document.getElementById('reasoning-text');
+    const reasoningSummary = reasoningDetails ? reasoningDetails.querySelector('summary') : null;
     
     // Render connections
     if (connectionsList && connectionsSection) {
@@ -480,8 +484,14 @@ function renderResults(connections, story, debug, reasoning, groups) {
 
     // Render reasoning if provided (collapsed by default)
     if (reasoningText && reasoningDetails) {
-        if (reasoning && reasoning.trim().length > 0) {
-            reasoningText.textContent = reasoning.trim();
+        const thinkingText = thinking && thinking.trim().length > 0 ? thinking.trim() : '';
+        const reasoningTextValue = reasoning && reasoning.trim().length > 0 ? reasoning.trim() : '';
+        const finalText = thinkingText || reasoningTextValue;
+        if (finalText) {
+            reasoningText.textContent = finalText;
+            if (reasoningSummary) {
+                reasoningSummary.textContent = thinkingText ? 'Model thinking (captured)' : 'Model reasoning (collapsed)';
+            }
             reasoningDetails.style.display = 'block';
         } else {
             reasoningDetails.style.display = 'none';
@@ -651,6 +661,7 @@ function updateLoadingText(text) {
 
 function hideLoading() {
     loadingOverlay.style.display = 'none';
+    clearLoadingHints();
 }
 
 function resetState() {
@@ -665,4 +676,19 @@ function resetState() {
     document.querySelectorAll('.context-card').forEach(c => c.classList.remove('selected'));
     document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('selected'));
     document.getElementById('participant-count').value = 2;
+}
+
+function scheduleLoadingHints() {
+    clearLoadingHints();
+    loadingTimers.push(setTimeout(() => {
+        updateLoadingText('Model thinking...');
+    }, 1200));
+    loadingTimers.push(setTimeout(() => {
+        updateLoadingText('Shaping the story...');
+    }, 2600));
+}
+
+function clearLoadingHints() {
+    loadingTimers.forEach(timer => clearTimeout(timer));
+    loadingTimers = [];
 }

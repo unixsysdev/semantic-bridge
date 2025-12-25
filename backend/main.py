@@ -13,6 +13,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import json
 import logging
+import re
 
 load_dotenv()
 
@@ -54,6 +55,19 @@ app.add_middleware(
 )
 
 
+def strip_think(text: str) -> tuple[str, Optional[str]]:
+    """Remove <think>...</think> blocks and return (clean_text, think_text)."""
+    matches = re.findall(r"<think>(.*?)</think>", text, flags=re.DOTALL)
+    if matches:
+        think_text = "\n\n".join(part.strip() for part in matches if part.strip())
+        cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+        return cleaned, think_text or None
+    if "<think>" in text:
+        before, rest = text.split("<think>", 1)
+        return before.strip(), rest.strip() or None
+    return text, None
+
+
 class Participant(BaseModel):
     id: str
     name: str
@@ -92,6 +106,7 @@ class GenerateResponse(BaseModel):
     connections: List[ConnectionResult]
     story: str
     reasoning: Optional[str] = None
+    thinking: Optional[str] = None
     debug: Optional[Dict[str, Any]] = None
     groups: Optional[List[GroupConnectionResult]] = None
 
@@ -238,10 +253,11 @@ async def generate_connections(request: GenerateRequest):
             )
         else:
             raw_story = await generate_story(prompt, temperature=request.temperature)
-            story = raw_story
+            cleaned_story, thinking = strip_think(raw_story)
+            story = cleaned_story
             reasoning = None
             # Try to parse JSON response with ideas + reasoning
-            cleaned = raw_story.strip()
+            cleaned = cleaned_story.strip()
             if cleaned.startswith("```"):
                 lines = cleaned.splitlines()
                 if lines and lines[0].startswith("```"):
@@ -312,6 +328,7 @@ async def generate_connections(request: GenerateRequest):
                 connections=connection_results,
                 story=story,
                 reasoning=reasoning,
+                thinking=thinking,
                 debug=debug_info,
                 groups=group_results
             )
