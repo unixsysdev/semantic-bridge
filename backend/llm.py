@@ -30,7 +30,7 @@ async def generate_story(
                 "messages": [
                     {
                         "role": "system",
-                        "content": "You are a creative storyteller and connection-finder. You find unexpected, meaningful bridges between disparate ideas. You write with warmth, surprise, and a sense of magic. Keep responses concise but evocative."
+                        "content": "You are a creative storyteller and connection-finder. You find unexpected, meaningful bridges between disparate ideas. You write with warmth, surprise, and a sense of magic. Keep responses concise but evocative. Follow the response format requested by the user and output JSON only."
                     },
                     {
                         "role": "user",
@@ -69,7 +69,7 @@ async def generate_stream(
                 "messages": [
                     {
                         "role": "system", 
-                        "content": "You are a creative storyteller and connection-finder. You find unexpected, meaningful bridges between disparate ideas. You write with warmth, surprise, and a sense of magic. Keep responses concise but evocative."
+                        "content": "You are a creative storyteller and connection-finder. You find unexpected, meaningful bridges between disparate ideas. You write with warmth, surprise, and a sense of magic. Keep responses concise but evocative. Follow the response format requested by the user and output JSON only."
                     },
                     {
                         "role": "user",

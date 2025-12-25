@@ -7,12 +7,22 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+import json
+import logging
 
 load_dotenv()
+
+# Logging
+log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, log_level, logging.INFO),
+    format="%(asctime)s %(levelname)s %(name)s - %(message)s"
+)
+logger = logging.getLogger("semanticbridge")
 
 # Get the directory paths
 BACKEND_DIR = Path(__file__).parent
@@ -66,6 +76,8 @@ class ConnectionResult(BaseModel):
 class GenerateResponse(BaseModel):
     connections: List[ConnectionResult]
     story: str
+    reasoning: Optional[str] = None
+    debug: Optional[Dict[str, Any]] = None
 
 
 @app.get("/")
@@ -85,6 +97,13 @@ async def generate_connections(request: GenerateRequest):
     finds semantic connections, generates story.
     """
     try:
+        logger.info(
+            "Generate request context=%s mode=%s participants=%d",
+            request.context,
+            request.mode,
+            len(request.participants)
+        )
+
         # Collect all bites and get embeddings
         all_bites: List[KnowledgeBite] = []
         all_texts: List[str] = []
@@ -103,30 +122,41 @@ async def generate_connections(request: GenerateRequest):
         
         # Get embeddings for all bites
         embeddings = await get_embeddings(all_texts)
+        embedding_dim = len(embeddings[0]) if embeddings else 0
+        logger.info("Embeddings fetched count=%d dim=%d", len(embeddings), embedding_dim)
         
         # Attach embeddings to bites
         for bite, embedding in zip(all_bites, embeddings):
             bite.embedding = embedding
         
         # Find connections based on mode
+        search_debug: Dict[str, Any] = {}
+        mode_used = request.mode
+        mode_note = None
         if request.mode == "max_distance":
             connections = find_maximum_distance_pairs(
                 all_bites,
                 cross_participant_only=True,
-                top_k=3
+                top_k=3,
+                debug=search_debug
             )
         elif request.mode == "asymmetric_gift" and len(request.participants) == 2:
             # For couples: find gifts from person 1 to person 2
             p1_bites = [b for b in all_bites if b.participant_id == request.participants[0].id]
             p2_bites = [b for b in all_bites if b.participant_id == request.participants[1].id]
-            connections = find_asymmetric_gifts(p1_bites, p2_bites, top_k=3)
+            connections = find_asymmetric_gifts(p1_bites, p2_bites, top_k=3, debug=search_debug)
         else:
             # Default to max distance
             connections = find_maximum_distance_pairs(
                 all_bites,
                 cross_participant_only=True,
-                top_k=3
+                top_k=3,
+                debug=search_debug
             )
+            if request.mode != "max_distance":
+                mode_used = "max_distance"
+                mode_note = f"Mode '{request.mode}' is not available for this request; fell back to max_distance."
+                logger.info(mode_note)
         
         if not connections:
             raise HTTPException(status_code=400, detail="Couldn't find interesting connections. Try adding more diverse knowledge bites!")
@@ -145,7 +175,34 @@ async def generate_connections(request: GenerateRequest):
                 media_type="text/plain"
             )
         else:
-            story = await generate_story(prompt, temperature=request.temperature)
+            raw_story = await generate_story(prompt, temperature=request.temperature)
+            story = raw_story
+            reasoning = None
+            # Try to parse JSON response with ideas + reasoning
+            cleaned = raw_story.strip()
+            if cleaned.startswith("```"):
+                lines = cleaned.splitlines()
+                if lines and lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines and lines[-1].startswith("```"):
+                    lines = lines[:-1]
+                cleaned = "\n".join(lines).strip()
+            try:
+                parsed = json.loads(cleaned)
+                story = parsed.get("ideas", story)
+                reasoning = parsed.get("reasoning")
+            except json.JSONDecodeError:
+                try:
+                    start = cleaned.find("{")
+                    end = cleaned.rfind("}")
+                    if start != -1 and end != -1 and end > start:
+                        parsed = json.loads(cleaned[start:end + 1])
+                        story = parsed.get("ideas", story)
+                        reasoning = parsed.get("reasoning")
+                    else:
+                        logger.warning("LLM response did not contain JSON; returning raw text")
+                except json.JSONDecodeError:
+                    logger.warning("LLM response was not valid JSON; returning raw text")
             
             # Format response
             connection_results = [
@@ -160,9 +217,27 @@ async def generate_connections(request: GenerateRequest):
                 for conn in connections
             ]
             
+            debug_info = {
+                "context": request.context,
+                "mode_requested": request.mode,
+                "mode_used": mode_used,
+                "mode_note": mode_note,
+                "participant_count": len(request.participants),
+                "bite_count": len(all_bites),
+                "embedding": {
+                    "model": "Qwen3-Embedding-8B",
+                    "dimensions": embedding_dim
+                },
+                "pairing_strategy": "pairwise",
+                "search": search_debug
+            }
+            logger.info("Search debug: %s", debug_info)
+
             return GenerateResponse(
                 connections=connection_results,
-                story=story
+                story=story,
+                reasoning=reasoning,
+                debug=debug_info
             )
     
     except HTTPException:

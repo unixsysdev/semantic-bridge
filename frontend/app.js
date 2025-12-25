@@ -324,7 +324,7 @@ async function generateWithoutStream(requestData) {
     state.results = data;
     
     hideLoading();
-    renderResults(data.connections, data.story);
+    renderResults(data.connections, data.story, data.debug, data.reasoning);
     goToStep(4);
 }
 
@@ -352,7 +352,7 @@ async function generateWithStream(requestData) {
         const data = JSON.parse(text);
         state.results = data;
         hideLoading();
-        renderResults(data.connections, data.story);
+        renderResults(data.connections, data.story, data.debug, data.reasoning);
         goToStep(4);
     } catch {
         // If it's streamed text, show it directly
@@ -362,9 +362,13 @@ async function generateWithStream(requestData) {
     }
 }
 
-function renderResults(connections, story) {
+function renderResults(connections, story, debug, reasoning) {
     const connectionsContainer = document.querySelector('.connections-found');
     const storyContainer = document.querySelector('.story-content');
+    const embeddingDetails = document.getElementById('embedding-insights');
+    const embeddingText = document.getElementById('embedding-insights-text');
+    const reasoningDetails = document.getElementById('reasoning-insights');
+    const reasoningText = document.getElementById('reasoning-text');
     
     // Render connections
     connectionsContainer.innerHTML = connections.map((conn, i) => `
@@ -393,24 +397,110 @@ function renderResults(connections, story) {
     
     // Render story with typewriter effect
     storyContainer.innerHTML = '';
-    typewriterEffect(storyContainer, story);
+    typewriterEffect(storyContainer, story || '');
+
+    // Render embedding/debug insights
+    if (debug && embeddingText && embeddingDetails) {
+        embeddingText.textContent = formatEmbeddingDebug(debug);
+        embeddingDetails.style.display = 'block';
+    } else if (embeddingDetails) {
+        embeddingDetails.style.display = 'none';
+    }
+
+    // Render reasoning if provided (collapsed by default)
+    if (reasoningText && reasoningDetails) {
+        if (reasoning && reasoning.trim().length > 0) {
+            reasoningText.textContent = reasoning.trim();
+            reasoningDetails.style.display = 'block';
+        } else {
+            reasoningDetails.style.display = 'none';
+        }
+    }
 }
 
 function typewriterEffect(element, text, speed = 15) {
     let i = 0;
-    element.innerHTML = '<span class="cursor"></span>';
+    const cursor = document.createElement('span');
+    cursor.className = 'cursor';
+    element.textContent = '';
+    element.appendChild(cursor);
     
     function type() {
         if (i < text.length) {
-            element.innerHTML = text.substring(0, i + 1) + '<span class="cursor"></span>';
+            element.textContent = text.substring(0, i + 1);
+            element.appendChild(cursor);
             i++;
             setTimeout(type, speed);
         } else {
-            element.innerHTML = text;
+            element.textContent = text;
         }
     }
     
     type();
+}
+
+function formatEmbeddingDebug(debug) {
+    const lines = [];
+    const search = debug.search || {};
+    const embedding = debug.embedding || {};
+    const counts = search.pair_counts || {};
+    const threshold = search.threshold || {};
+    const statsAll = (search.distance_stats || {}).all_pairs || {};
+    const statsInRange = (search.distance_stats || {}).within_threshold || {};
+
+    lines.push(`Context: ${debug.context || 'n/a'}`);
+    lines.push(`Mode: requested=${debug.mode_requested || 'n/a'}, used=${debug.mode_used || 'n/a'}`);
+    if (debug.mode_note) {
+        lines.push(`Note: ${debug.mode_note}`);
+    }
+    lines.push(`Participants: ${debug.participant_count || 0}`);
+    lines.push(`Knowledge bites: ${debug.bite_count || 0}`);
+    if (embedding.model || embedding.dimensions) {
+        lines.push(`Embedding model: ${embedding.model || 'n/a'} (${embedding.dimensions || 0} dims)`);
+    }
+    lines.push(`Pairing strategy: ${debug.pairing_strategy || 'pairwise'}`);
+    if (search.strategy) {
+        lines.push(`Search strategy: ${search.strategy}`);
+    }
+    if (threshold.min !== undefined && threshold.max !== undefined) {
+        lines.push(`Distance threshold: ${threshold.min} - ${threshold.max}`);
+    }
+    if (Object.keys(counts).length > 0) {
+        const countParts = [];
+        if ('total_pairs' in counts) countParts.push(`total=${counts.total_pairs}`);
+        if ('cross_participant_pairs' in counts) countParts.push(`cross=${counts.cross_participant_pairs}`);
+        if ('with_embeddings' in counts) countParts.push(`with_embeddings=${counts.with_embeddings}`);
+        if ('within_threshold' in counts) countParts.push(`in_range=${counts.within_threshold}`);
+        if (countParts.length > 0) {
+            lines.push(`Pairs: ${countParts.join(', ')}`);
+        }
+    }
+    if (Object.keys(statsAll).length > 0) {
+        lines.push(`Distance stats (all): min=${formatNumber(statsAll.min)}, max=${formatNumber(statsAll.max)}, mean=${formatNumber(statsAll.mean)}`);
+    }
+    if (Object.keys(statsInRange).length > 0) {
+        lines.push(`Distance stats (in range): min=${formatNumber(statsInRange.min)}, max=${formatNumber(statsInRange.max)}, mean=${formatNumber(statsInRange.mean)}`);
+    }
+    if (Array.isArray(search.candidate_pairs) && search.candidate_pairs.length > 0) {
+        lines.push('Top candidate pairs:');
+        search.candidate_pairs.forEach((pair, idx) => {
+            const bite1 = truncateText(pair.bite1 || '', 80);
+            const bite2 = truncateText(pair.bite2 || '', 80);
+            lines.push(`${idx + 1}. ${formatNumber(pair.distance)} | ${pair.participant1}: "${bite1}" <> ${pair.participant2}: "${bite2}"`);
+        });
+    }
+
+    return lines.join('\n');
+}
+
+function truncateText(text, maxLength) {
+    if (text.length <= maxLength) return text;
+    return text.slice(0, maxLength - 3) + '...';
+}
+
+function formatNumber(value) {
+    if (typeof value !== 'number') return '0.000';
+    return value.toFixed(3);
 }
 
 // === Settings ===
