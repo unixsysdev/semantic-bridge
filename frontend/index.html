@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SemanticBridge - Connect Through Stories</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1 class="logo">Semantic<span>Bridge</span></h1>
+            <p class="tagline">Find unexpected connections between distant ideas</p>
+        </header>
+
+        <!-- Wizard Container -->
+        <main class="wizard">
+            <!-- Step 1: Choose Context -->
+            <section class="step step-1 active" data-step="1">
+                <h2>What brings you together?</h2>
+                <p class="step-description">Different contexts create different kinds of magic.</p>
+                
+                <div class="context-cards">
+                    <button class="context-card" data-context="team">
+                        <div class="context-icon">🧠</div>
+                        <h3>Team Brainstorm</h3>
+                        <p>Find actionable insights hidden between your ideas</p>
+                    </button>
+                    
+                    <button class="context-card" data-context="strangers">
+                        <div class="context-icon">✨</div>
+                        <h3>Strangers Meeting</h3>
+                        <p>Discover serendipitous connections at events</p>
+                    </button>
+                    
+                    <button class="context-card" data-context="couples">
+                        <div class="context-icon">💫</div>
+                        <h3>Couples / Dates</h3>
+                        <p>Uncover tender "I didn't know that" moments</p>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Step 2: Choose Mode & Participants -->
+            <section class="step step-2" data-step="2">
+                <h2>How should we find connections?</h2>
+                <p class="step-description">Choose the kind of magic you want.</p>
+                
+                <div class="mode-cards">
+                    <button class="mode-card" data-mode="max_distance">
+                        <h3>🌌 Maximum Distance</h3>
+                        <p>Find the furthest-apart ideas that still have a thread</p>
+                    </button>
+                    
+                    <button class="mode-card" data-mode="surprise_bridge">
+                        <h3>🌉 Surprise Bridge</h3>
+                        <p>Two distant ideas + an unexpected third concept</p>
+                    </button>
+                    
+                    <button class="mode-card couples-only" data-mode="asymmetric_gift">
+                        <h3>🎁 Asymmetric Gift</h3>
+                        <p>Something from one person illuminates the other</p>
+                    </button>
+                </div>
+
+                <div class="participant-config">
+                    <label for="participant-count">How many people?</label>
+                    <div class="counter">
+                        <button class="counter-btn minus" type="button">−</button>
+                        <input type="number" id="participant-count" value="2" min="2" max="8">
+                        <button class="counter-btn plus" type="button">+</button>
+                    </div>
+                </div>
+
+                <div class="step-nav">
+                    <button class="btn btn-secondary back-btn">← Back</button>
+                    <button class="btn btn-primary next-btn" disabled>Continue →</button>
+                </div>
+            </section>
+
+            <!-- Step 3: Participant Input -->
+            <section class="step step-3" data-step="3">
+                <h2>Share your knowledge bites</h2>
+                <p class="step-description">Memories, interests, random facts, obsessions — the weirder the better!</p>
+                
+                <div class="participants-container">
+                    <!-- Participants will be dynamically added here -->
+                </div>
+
+                <div class="step-nav">
+                    <button class="btn btn-secondary back-btn">← Back</button>
+                    <button class="btn btn-primary generate-btn">✨ Find Connections</button>
+                </div>
+            </section>
+
+            <!-- Step 4: Results -->
+            <section class="step step-4" data-step="4">
+                <h2>Your unexpected connections</h2>
+                
+                <div class="results-container">
+                    <div class="connections-found">
+                        <!-- Connections will be shown here -->
+                    </div>
+                    
+                    <div class="story-container">
+                        <h3>The Story</h3>
+                        <div class="story-content">
+                            <!-- Generated story will appear here -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="step-nav">
+                    <button class="btn btn-secondary back-btn">← Try different inputs</button>
+                    <button class="btn btn-primary restart-btn">🔄 Start Over</button>
+                </div>
+            </section>
+
+            <!-- Loading State -->
+            <div class="loading-overlay" style="display: none;">
+                <div class="loading-content">
+                    <div class="spinner"></div>
+                    <p class="loading-text">Finding semantic bridges...</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- Settings Panel (temperature, etc.) -->
+        <aside class="settings-panel">
+            <button class="settings-toggle">⚙️</button>
+            <div class="settings-content">
+                <h4>Generation Settings</h4>
+                <div class="setting">
+                    <label for="temperature">Creativity (Temperature)</label>
+                    <input type="range" id="temperature" min="0.1" max="1.5" step="0.1" value="0.8">
+                    <span class="temperature-value">0.8</span>
+                </div>
+                <div class="setting">
+                    <label>
+                        <input type="checkbox" id="stream-toggle" checked>
+                        Stream response
+                    </label>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

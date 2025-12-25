@@ -1,0 +1,660 @@
+/* === CSS Variables & Reset === */
+:root {
+    --primary: #6366f1;
+    --primary-dark: #4f46e5;
+    --primary-light: #818cf8;
+    --secondary: #f472b6;
+    --background: #0f0f1a;
+    --surface: #1a1a2e;
+    --surface-light: #252542;
+    --text: #e2e8f0;
+    --text-muted: #94a3b8;
+    --text-dim: #64748b;
+    --border: #334155;
+    --success: #10b981;
+    --warning: #f59e0b;
+    
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-serif: 'Playfair Display', Georgia, serif;
+    
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
+    
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.5);
+    --shadow-glow: 0 0 30px rgba(99, 102, 241, 0.3);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-sans);
+    background: var(--background);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.6;
+}
+
+/* === Container === */
+.container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem;
+    min-height: 100vh;
+}
+
+/* === Header === */
+.header {
+    text-align: center;
+    margin-bottom: 3rem;
+    padding-top: 2rem;
+}
+
+.logo {
+    font-family: var(--font-serif);
+    font-size: 2.5rem;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 0.5rem;
+}
+
+.logo span {
+    color: var(--primary-light);
+}
+
+.tagline {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+}
+
+/* === Wizard Steps === */
+.wizard {
+    position: relative;
+}
+
+.step {
+    display: none;
+    animation: fadeIn 0.4s ease;
+}
+
+.step.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.step h2 {
+    font-family: var(--font-serif);
+    font-size: 1.8rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    text-align: center;
+}
+
+.step-description {
+    color: var(--text-muted);
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+/* === Context Cards (Step 1) === */
+.context-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.context-card {
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 2rem 1.5rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+    font-family: inherit;
+    color: inherit;
+}
+
+.context-card:hover {
+    border-color: var(--primary);
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-glow);
+}
+
+.context-card.selected {
+    border-color: var(--primary);
+    background: var(--surface-light);
+    box-shadow: var(--shadow-glow);
+}
+
+.context-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.context-card h3 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.context-card p {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+/* === Mode Cards (Step 2) === */
+.mode-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.mode-card {
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: left;
+    font-family: inherit;
+    color: inherit;
+}
+
+.mode-card:hover:not(:disabled) {
+    border-color: var(--primary);
+}
+
+.mode-card.selected {
+    border-color: var(--primary);
+    background: var(--surface-light);
+}
+
+.mode-card:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.mode-card h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.mode-card p {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+/* === Participant Counter === */
+.participant-config {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+    margin: 2rem 0;
+    padding: 1.5rem;
+    background: var(--surface);
+    border-radius: var(--radius-md);
+}
+
+.participant-config label {
+    font-weight: 500;
+}
+
+.counter {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.counter-btn {
+    width: 40px;
+    height: 40px;
+    border: 2px solid var(--border);
+    background: var(--surface-light);
+    color: var(--text);
+    border-radius: var(--radius-sm);
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.counter-btn:hover {
+    border-color: var(--primary);
+    background: var(--primary);
+}
+
+.counter input {
+    width: 60px;
+    text-align: center;
+    font-size: 1.2rem;
+    font-weight: 600;
+    background: var(--background);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    padding: 0.5rem;
+}
+
+/* === Participants Input (Step 3) === */
+.participants-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.participant-card {
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+}
+
+.participant-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.participant-number {
+    width: 36px;
+    height: 36px;
+    background: var(--primary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.participant-name-input {
+    flex: 1;
+    background: var(--background);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    color: var(--text);
+    font-family: inherit;
+}
+
+.participant-name-input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.bites-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.bite-input-wrapper {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.bite-input {
+    flex: 1;
+    background: var(--background);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+    color: var(--text);
+    font-family: inherit;
+    resize: none;
+}
+
+.bite-input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.bite-input::placeholder {
+    color: var(--text-dim);
+}
+
+.remove-bite-btn {
+    width: 36px;
+    height: 36px;
+    background: transparent;
+    border: 2px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+}
+
+.remove-bite-btn:hover {
+    border-color: #ef4444;
+    color: #ef4444;
+}
+
+.add-bite-btn {
+    background: transparent;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+    font-size: 0.9rem;
+}
+
+.add-bite-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+/* === Buttons === */
+.btn {
+    padding: 0.875rem 1.75rem;
+    border-radius: var(--radius-sm);
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+    border: none;
+}
+
+.btn-primary {
+    background: var(--primary);
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: var(--primary-dark);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-secondary {
+    background: transparent;
+    border: 2px solid var(--border);
+    color: var(--text);
+}
+
+.btn-secondary:hover {
+    border-color: var(--text-muted);
+}
+
+.step-nav {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+}
+
+/* === Results (Step 4) === */
+.results-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.connections-found {
+    display: grid;
+    gap: 1rem;
+}
+
+.connection-card {
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+}
+
+.connection-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+
+.connection-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--primary-light);
+    font-weight: 600;
+}
+
+.connection-distance {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    background: var(--surface-light);
+    padding: 0.25rem 0.75rem;
+    border-radius: 100px;
+}
+
+.connection-bites {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.connection-bite {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+}
+
+.bite-author {
+    font-weight: 600;
+    color: var(--secondary);
+    white-space: nowrap;
+    min-width: 80px;
+}
+
+.bite-text {
+    color: var(--text);
+}
+
+.story-container {
+    background: var(--surface);
+    border: 2px solid var(--primary);
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+    box-shadow: var(--shadow-glow);
+}
+
+.story-container h3 {
+    font-family: var(--font-serif);
+    font-size: 1.3rem;
+    margin-bottom: 1rem;
+    color: var(--primary-light);
+}
+
+.story-content {
+    font-size: 1.05rem;
+    line-height: 1.8;
+    white-space: pre-wrap;
+}
+
+.story-content .cursor {
+    display: inline-block;
+    width: 2px;
+    height: 1.2em;
+    background: var(--primary);
+    animation: blink 1s infinite;
+    vertical-align: text-bottom;
+}
+
+@keyframes blink {
+    50% { opacity: 0; }
+}
+
+/* === Loading Overlay === */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 15, 26, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+
+.loading-content {
+    text-align: center;
+}
+
+.spinner {
+    width: 60px;
+    height: 60px;
+    border: 4px solid var(--surface-light);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 1.5rem;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.loading-text {
+    font-size: 1.1rem;
+    color: var(--text-muted);
+}
+
+/* === Settings Panel === */
+.settings-panel {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+}
+
+.settings-toggle {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    font-size: 1.3rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.settings-toggle:hover {
+    border-color: var(--primary);
+    transform: scale(1.05);
+}
+
+.settings-content {
+    display: none;
+    position: absolute;
+    bottom: 60px;
+    right: 0;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+    min-width: 280px;
+    box-shadow: var(--shadow-lg);
+}
+
+.settings-panel.open .settings-content {
+    display: block;
+}
+
+.settings-content h4 {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    color: var(--text);
+}
+
+.setting {
+    margin-bottom: 1rem;
+}
+
+.setting label {
+    display: block;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+}
+
+.setting input[type="range"] {
+    width: 100%;
+    accent-color: var(--primary);
+}
+
+.temperature-value {
+    font-weight: 600;
+    color: var(--primary-light);
+}
+
+.setting input[type="checkbox"] {
+    margin-right: 0.5rem;
+    accent-color: var(--primary);
+}
+
+/* === Responsive === */
+@media (max-width: 640px) {
+    .container {
+        padding: 1rem;
+    }
+    
+    .logo {
+        font-size: 2rem;
+    }
+    
+    .context-cards {
+        grid-template-columns: 1fr;
+    }
+    
+    .mode-cards {
+        grid-template-columns: 1fr;
+    }
+    
+    .participant-config {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .step-nav {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .step-nav .btn {
+        width: 100%;
+    }
+}
